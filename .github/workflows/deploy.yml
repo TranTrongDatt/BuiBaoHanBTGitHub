@@ -1,0 +1,137 @@
+name: "CI/CD - Build & Push Docker Image"
+
+# ================================================================
+# TRIGGER: Chạy mỗi khi push code lên nhánh main
+# workflow_dispatch: cho phép chạy thủ công trên GitHub UI
+# ================================================================
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# ================================================================
+# BIẾN TOÀN CỤC
+# IMAGE_NAME: tên image trên Docker Hub
+# PROJECT_DIR: thư mục chứa source code và Dockerfile
+# ================================================================
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/buibaohan-springboot
+  PROJECT_DIR: BuiBaoHanBTDemo1
+
+jobs:
+
+  # ==============================================================
+  # JOB 1: QUALITY GATE — Chạy Maven Test
+  # Mục tiêu: Chỉ build image khi toàn bộ test pass
+  # ==============================================================
+  test:
+    name: "Job 1 - Maven Test (Quality Gate)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Bước 1 - Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "Bước 2 - Cài Java 25 (Temurin)"
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      # Cache Maven dependencies → tăng tốc những lần build tiếp theo
+      - name: "Bước 3 - Cache Maven dependencies"
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
+
+      - name: "Bước 4 - Chạy Maven Test"
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: mvn test -q
+
+  # ==============================================================
+  # JOB 2: BUILD & PUSH DOCKER IMAGE
+  # needs: test → CHỈ chạy khi Job 1 thành công
+  # ==============================================================
+  build-and-push:
+    name: "Job 2 - Build & Push Docker Image"
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: "Bước 1 - Checkout code"
+        uses: actions/checkout@v4
+
+      # ── CHUẨN BỊ TAGS ────────────────────────────────────────
+      # Tạo 3 tag cho mỗi lần push:
+      #   latest            → image mới nhất
+      #   main-<sha7>       → traceable đến đúng commit (vd: main-a3f9c12)
+      #   YYYY.MM.DD        → date-based, dễ rollback theo ngày
+      # ──────────────────────────────────────────────────────────
+      - name: "Bước 2 - Tạo metadata & tags"
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=main-,format=short
+            type=schedule,pattern={{date 'YYYY.MM.DD'}}
+
+      # ── ĐĂNG NHẬP DOCKER HUB ─────────────────────────────────
+      # Dùng Secrets đã cấu hình trong GitHub → Settings → Secrets:
+      #   DOCKERHUB_USERNAME : tên tài khoản Docker Hub
+      #   DOCKERHUB_TOKEN    : Access Token (tạo tại hub.docker.com → Account Settings)
+      # ──────────────────────────────────────────────────────────
+      - name: "Bước 3 - Đăng nhập Docker Hub"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # ── BUILDX (hỗ trợ multi-platform) ───────────────────────
+      # Buildx cho phép build image chạy được trên nhiều kiến trúc:
+      #   linux/amd64 → server cloud (AWS, GCP, Azure...)
+      #   linux/arm64 → Apple M1/M2, AWS Graviton
+      # ──────────────────────────────────────────────────────────
+      - name: "Bước 4 - Cài Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      # ── BUILD & PUSH ──────────────────────────────────────────
+      # cache-from/cache-to: tái sử dụng layer cache từ lần build trước
+      # → Lần đầu build ~5-8 phút, lần sau ~2-3 phút
+      # ──────────────────────────────────────────────────────────
+      - name: "Bước 5 - Build & Push Image lên Docker Hub"
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ env.PROJECT_DIR }}
+          file: ./${{ env.PROJECT_DIR }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── BUILD SUMMARY ─────────────────────────────────────────
+      # In kết quả vào tab "Summary" của GitHub Actions
+      # ──────────────────────────────────────────────────────────
+      - name: "Bước 6 - In Build Summary"
+        run: |
+          echo "## Docker Image đã được Push thành công! " >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Thông tin | Giá trị |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | \`${{ env.IMAGE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Nhánh** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Thời gian** | \`$(date +'%Y-%m-%d %H:%M:%S UTC')\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tags đã push:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Docker Hub:** https://hub.docker.com/r/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
