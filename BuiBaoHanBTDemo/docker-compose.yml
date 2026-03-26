@@ -1,0 +1,32 @@
+services:
+  app-java: # Tên dịch vụ Spring Boot
+    build: . # Tìm Dockerfile ở thư mục hiện tại để build image
+    ports:
+      - "8080:8080" # Mở cổng: máy_thật:container → truy cập localhost:8080
+    depends_on:
+      db-mysql:
+        condition: service_healthy # Chờ MySQL THỰC SỰ sẵn sàng, không chỉ chờ container bật
+    environment:
+      # Các biến này sẽ GHI ĐÈ lên application.properties khi chạy trong Docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://db-mysql:3306/demo_docker_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+  db-mysql: # Tên dịch vụ MySQL
+    image: mysql:8.0 # Tải thẳng image từ Docker Hub, không cần Dockerfile
+    environment:
+      MYSQL_ROOT_PASSWORD: root       # Mật khẩu root
+      MYSQL_DATABASE: demo_docker_db  # Tự tạo database này khi khởi động
+    volumes:
+      - db_data:/var/lib/mysql # Dữ liệu DB không bị mất khi xóa container
+    healthcheck:
+      # Kiểm tra MySQL đã sẵn sàng nhận kết nối chưa (chạy mỗi 10 giây)
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s  # Kiểm tra mỗi 10 giây
+      timeout: 5s    # Timeout mỗi lần kiểm tra
+      retries: 5     # Thử lại tối đa 5 lần trước khi báo lỗi
+
+volumes:
+  db_data: # Khai báo volume dùng chung giữa các lần chạy

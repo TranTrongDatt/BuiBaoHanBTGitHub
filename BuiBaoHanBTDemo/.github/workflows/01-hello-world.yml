@@ -1,0 +1,34 @@
+name: "BT1 - Hello World & Đọc File"
+
+# Khi nào workflow này chạy?
+on:
+  push:
+    branches: [ "main" ]   # Chạy mỗi khi push code lên nhánh main
+  workflow_dispatch:        # Cho phép bấm nút chạy thủ công trên GitHub
+
+jobs:
+  thuc_hanh_doc_file:
+    runs-on: ubuntu-latest  # Mượn máy ảo Ubuntu của GitHub để chạy
+
+    steps:
+      # BƯỚC 1: In lời chào ra màn hình
+      - name: "Bước 1 - Xin chào"
+        run: echo "Bao Han xin chao nghen!"
+
+      # BƯỚC 2: Tải toàn bộ code từ repo về máy ảo
+      - name: "Bước 2 - Tải code về máy ảo"
+        uses: actions/checkout@v4
+
+      # BƯỚC 3: Đọc nội dung file README.md
+      - name: "Bước 3 - Đọc file README.md"
+        run: cat README.md
+
+      # BƯỚC 4: Xem thông tin máy ảo đang chạy
+      - name: "Bước 4 - Xem thông tin máy ảo"
+        run: |
+          echo "=== Hệ điều hành ==="
+          uname -a
+          echo "=== Thư mục hiện tại ==="
+          pwd
+          echo "=== Danh sách file ==="
+          ls -la

@@ -1,0 +1,28 @@
+name: "BT3 - Docker Build Image"
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # BƯỚC 1: Tải code về
+      - name: "Bước 1 - Tải code"
+        uses: actions/checkout@v4
+
+      # BƯỚC 2: Build Docker image từ Dockerfile
+      # (Máy ảo Ubuntu của GitHub đã có sẵn Docker, không cần cài thêm)
+      - name: "Bước 2 - Build Docker image"
+        run: docker build -t buibaohanbtdemo:latest .
+
+      # BƯỚC 3: Xem image vừa build
+      - name: "Bước 3 - Kiểm tra image"
+        run: |
+          echo "=== Danh sách Docker image ==="
+          docker images
+          echo "=== Thông tin chi tiết image ==="
+          docker inspect buibaohanbtdemo:latest | grep -E '"Created"|"Architecture"|"Os"'
