@@ -15,7 +15,7 @@ on:
 # PROJECT_DIR: thư mục chứa source code và Dockerfile
 # ================================================================
 env:
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/buibaohan-springboot
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/baitapdocker
   PROJECT_DIR: BuiBaoHanBTDemo1
 
 jobs:
@@ -135,7 +135,7 @@ jobs:
       - name: Triển khai lên DevOps Classroom
         run: |
           REPO="${{ env.IMAGE_NAME }}"
-          CONTAINER_PORT=8080
+          CONTAINER_PORT=80
           RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${{ secrets.DEPLOY_URL }}?repo=$REPO&tag=latest&slot=3&container_port=$CONTAINER_PORT&strict_container_port=0")
           BODY=$(echo "$RESPONSE" | sed "$d")
           CODE=$(echo "$RESPONSE" | tail -n1)
